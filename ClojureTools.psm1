@@ -25,6 +25,7 @@ function Invoke-Clojure {
 
   $PrintClassPath = $FALSE
   $Describe = $FALSE
+  $Verbose = $FALSE
   $Force = $FALSE
   $Repro = $FALSE
   $Tree = $FALSE
@@ -38,51 +39,22 @@ function Invoke-Clojure {
   $MainAliases = @()
   $AllAliases = @()
 
+  Write-Host $args
   $params = $args
   while ($params.Count -gt 0) {
     $arg, $params = $params
     if ($arg.StartsWith("-J")) {
       $JvmOpts += $arg.Substring(2)
     } elseif ($arg.StartsWith("-R")) {
-      $aliases, $params = $params
-      if ($aliases) {
-        $ResolveAliases += $aliases
-      } else {
-        echo "Missing aliases"
-        exit 1
-      }
+      $ResolveAliases += $arg.Substring(2)
     } elseif ($arg.StartsWith("-C")) {
-      $aliases, $params = $params
-      if ($aliases) {
-        $ClassPathAliases += $aliases
-      } else {
-        echo "Missing aliases"
-        exit 1
-      }
+      $ClassPathAliases += $arg.Substring(2)
     } elseif ($arg.StartsWith("-O")) {
-      $aliases, $params = $params
-      if ($aliases) {
-        $JvmAliases += $aliases
-      } else {
-        echo "Missing aliases"
-        exit 1
-      }
+      $JvmAliases += $arg.Substring(2)
     } elseif ($arg.StartsWith("-M")) {
-      $aliases, $params = $params
-      if ($aliases) {
-        $MainAliases += $aliases
-      } else {
-        echo "Missing aliases"
-        exit 1
-      }
+      $MainAliases += $arg.Substring(2)
     } elseif ($arg.StartsWith("-A")) {
-      $aliases, $params = $params
-      if ($aliases) {
-        $AllAliases += $aliases
-      } else {
-        echo "Missing aliases"
-        exit 1
-      }
+      $AllAliases += $arg.Substring(2)
     } elseif ($arg -eq "-Sdeps") {
       $DepsData, $params = $params
       if (!($DepsData)) {
@@ -98,7 +70,7 @@ function Invoke-Clojure {
     } elseif ($arg -eq "-Spath") {
       $PrintClassPath = $TRUE
     } elseif ($arg -eq "-Sverbose") {
-      $VerbosePreference = $TRUE
+      $Verbose = $TRUE
     } elseif ($arg -eq "-Sdescribe") {
       $Describe = $TRUE
     } elseif ($arg -eq "-Sforce") {
@@ -219,13 +191,14 @@ function Invoke-Clojure {
     $CacheDir = "$UserCacheDir"
   }
 
-  $CK = "$ResolveAliases|$ClassPathAliases|$AllAliases|$JvmAliases|$MainAliases|$DepsData|" + ($ConfigPaths -join '|')
-  $CK = (Get-StringHash $CK) | % {$_ -replace "-", ""}
+  $CK = "$($ResolveAliases -join '')|$($ClassPathAliases -join '')|$($AllAliases -join '')|$($JvmAliases -join '')|$($MainAliases -join '')|$DepsData|$($ConfigPaths -join '|')"
+  $CK = (Get-StringHash $CK) -replace '-', ''
 
   $LibsFile = "$CacheDir\$CK.libs"
   $CpFile = "$CacheDir\$CK.cp"
 
-  Write-Verbose @"
+  if ($Verbose) {
+    Write-Host @"
 version      = $Version
 install_dir  = $InstallDir
 config_dir   = $ConfigDir
@@ -233,6 +206,7 @@ config_paths = $ConfigPaths
 cache_dir    = $CacheDir
 cp_file      = $CpFile
 "@
+  }
 
   $Stale = $FALSE
   if ($Force -or !(Test-Path $CpFile)) {
@@ -273,8 +247,10 @@ cp_file      = $CpFile
   }
 
   if ($Stale) {
-    Write-Verbose "Refreshing classpath"
-    & "$JavaCmd" -Xmx256m -classpath "$ToolsCp" clojure.main -m clojure.tools.deps.alpha.script.make-classpath --config-files=$ConfigStr --libs-file=$LibsFile --cp-file=$CpFile --jvm-file=$JvmFile --main-file=$MainFile @ToolsArgs
+    if ($Verbose) {
+      Write-Host "Refreshing classpath"
+    }
+    & $JavaCmd -Xmx256m -classpath $ToolsCp clojure.main -m clojure.tools.deps.alpha.script.make-classpath --config-files $ConfigStr --libs-file $LibsFile --cp-file $CpFile --jvm-file $JvmFile --main-file $MainFile $ToolsArgs
   }
 
   if ($ForceCp) {
@@ -284,7 +260,7 @@ cp_file      = $CpFile
   }
 
   if ($Pom) {
-    & $JavaCmd -Xmx256m -classpath $ToolsCp clojure.main -m clojure.tools.deps.alpha.script.generate-manifest --config-files=$ConfigStr --gen=pom @ToolsArgs
+    & $JavaCmd -Xmx256m -classpath $ToolsCp clojure.main -m clojure.tools.deps.alpha.script.generate-manifest --config-files=$ConfigStr --gen=pom $ToolsArgs
   } elseif ($PrintClassPath) {
     echo "$CP"
   } elseif ($Describe) {
@@ -301,11 +277,11 @@ cp_file      = $CpFile
  :cache-dir $CacheDir
  :force $Force
  :repro $Repro
- :resolve-aliases "$(-join ${resolve_aliases[@]})"
- :classpath-aliases "$(-join ${classpath_aliases[@]})"
- :jvm-aliases "$(-join ${jvm_aliases[@]})"
- :main-aliases "$(-join ${main_aliases[@]})"
- :all-aliases "$(-join ${all_aliases[@]})"}
+ :resolve-aliases "$($ResolveAliases -join ' ')"
+ :classpath-aliases "$($ClasspathAliases -join ' ')"
+ :jvm-aliases "$($JvmAliases -join ' ')"
+ :main-aliases "$($MainAliases -join ' ')"
+ :all-aliases "$($AllAliases -join ' ')"}
 "@
   } elseif ($Tree) {
     & "$JavaCmd" -Xmx256m -classpath "$ToolsCp" clojure.main -m clojure.tools.deps.alpha.script.print-tree "--libs-file=$LibsFile"
