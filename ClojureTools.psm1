@@ -39,22 +39,51 @@ function Invoke-Clojure {
   $MainAliases = @()
   $AllAliases = @()
 
-  Write-Host $args
   $params = $args
   while ($params.Count -gt 0) {
     $arg, $params = $params
     if ($arg.StartsWith("-J")) {
       $JvmOpts += $arg.Substring(2)
     } elseif ($arg.StartsWith("-R")) {
-      $ResolveAliases += $arg.Substring(2)
+      $aliases, $params = $params
+      if ($aliases) {
+        $ResolveAliases += ":$aliases"
+      } else {
+        echo "Missing aliases"
+        exit 1
+      }
     } elseif ($arg.StartsWith("-C")) {
-      $ClassPathAliases += $arg.Substring(2)
+      $aliases, $params = $params
+      if ($aliases) {
+        $ClassPathAliases += ":$aliases"
+      } else {
+        echo "Missing aliases"
+        exit 1
+      }
     } elseif ($arg.StartsWith("-O")) {
-      $JvmAliases += $arg.Substring(2)
+      $aliases, $params = $params
+      if ($aliases) {
+        $JvmAliases += ":$aliases"
+      } else {
+        echo "Missing aliases"
+        exit 1
+      }
     } elseif ($arg.StartsWith("-M")) {
-      $MainAliases += $arg.Substring(2)
+      $aliases, $params = $params
+      if ($aliases) {
+        $MainAliases += ":$aliases"
+      } else {
+        echo "Missing aliases"
+        exit 1
+      }
     } elseif ($arg.StartsWith("-A")) {
-      $AllAliases += $arg.Substring(2)
+      $aliases, $params = $params
+      if ($aliases) {
+        $AllAliases += ":$aliases"
+      } else {
+        echo "Missing aliases"
+        exit 1
+      }
     } elseif ($arg -eq "-Sdeps") {
       $DepsData, $params = $params
       if (!($DepsData)) {
@@ -196,6 +225,8 @@ function Invoke-Clojure {
 
   $LibsFile = "$CacheDir\$CK.libs"
   $CpFile = "$CacheDir\$CK.cp"
+  $JvmFile = "$CacheDir/$CK.jvm"
+  $MainFile = "$CacheDir/$CK.main"
 
   if ($Verbose) {
     Write-Host @"
@@ -250,7 +281,7 @@ cp_file      = $CpFile
     if ($Verbose) {
       Write-Host "Refreshing classpath"
     }
-    & $JavaCmd -Xmx256m -classpath $ToolsCp clojure.main -m clojure.tools.deps.alpha.script.make-classpath --config-files $ConfigStr --libs-file $LibsFile --cp-file $CpFile --jvm-file $JvmFile --main-file $MainFile $ToolsArgs
+    & $JavaCmd -Xmx256m -classpath $ToolsCp clojure.main -m clojure.tools.deps.alpha.script.make-classpath --config-files $ConfigStr --libs-file $LibsFile --cp-file $CpFile --jvm-file $JvmFile --main-file $MainFile @ToolsArgs
   }
 
   if ($ForceCp) {
@@ -260,9 +291,9 @@ cp_file      = $CpFile
   }
 
   if ($Pom) {
-    & $JavaCmd -Xmx256m -classpath $ToolsCp clojure.main -m clojure.tools.deps.alpha.script.generate-manifest --config-files=$ConfigStr --gen=pom $ToolsArgs
+    & $JavaCmd -Xmx256m -classpath $ToolsCp clojure.main -m clojure.tools.deps.alpha.script.generate-manifest --config-files=$ConfigStr --gen=pom @ToolsArgs
   } elseif ($PrintClassPath) {
-    echo "$CP"
+    Write-Host $CP
   } elseif ($Describe) {
     foreach ($ConfigPath in $ConfigPaths) {
       if (Test-Path $ConfigPath) {
@@ -284,10 +315,15 @@ cp_file      = $CpFile
  :all-aliases "$($AllAliases -join ' ')"}
 "@
   } elseif ($Tree) {
-    & "$JavaCmd" -Xmx256m -classpath "$ToolsCp" clojure.main -m clojure.tools.deps.alpha.script.print-tree "--libs-file=$LibsFile"
+    & $JavaCmd -Xmx256m -classpath $ToolsCp clojure.main -m clojure.tools.deps.alpha.script.print-tree --libs-file $LibsFile
   } else {
-    # TODO handle jvm and main cache opts
-    & "$JavaCmd" @JvmOpts -classpath "$CP" "-Dclojure.libfile=$LibsFile" clojure.main @ClojureArgs
+    if (Test-Path $JvmFile) {
+      $JvmCacheOpts = Get-Content $JvmFile
+    }
+    if (Test-Path $MainFile) {
+      $MainCacheOpts = Get-Content $MainFile
+    }
+    & $JavaCmd @JvmCacheOpts @JvmOpts "-Dclojure.libfile=$LibsFile" -classpath $CP clojure.main @MainCacheOpts @ClojureArgs
   }
 }
 
