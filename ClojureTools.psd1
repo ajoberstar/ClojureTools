@@ -4,7 +4,7 @@
   RootModule        = 'ClojureTools.psm1'
 
   # Version number of this module.
-  ModuleVersion     = '1.10.0.411'
+  ModuleVersion     = '1.10.0.414'
 
   # Supported PSEditions
   # CompatiblePSEditions = @()
@@ -79,7 +79,7 @@
   # ModuleList = @()
 
   # List of all files packaged with this module
-  FileList          = 'deps.edn', 'example-deps.edn', 'clojure-tools-1.10.0.411.jar'
+  FileList          = 'deps.edn', 'example-deps.edn', 'clojure-tools-1.10.0.414.jar'
 
   # Private data to pass to the module specified in RootModule/ModuleToProcess. This may also contain a PSData hashtable with additional module metadata used by PowerShell.
   PrivateData       = @{

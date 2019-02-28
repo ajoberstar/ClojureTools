@@ -18,7 +18,7 @@ function IsNewerFile($file1, $file2) {
 
 function Invoke-Clojure {
   $InstallDir = $PSScriptRoot
-  $Version = "1.10.0.411"
+  $Version = "1.10.0.414"
   $ToolsCp = "$InstallDir\clojure-tools-$Version.jar"
 
   $ErrorActionPreference = "Stop"
@@ -303,9 +303,9 @@ cp_file      = $CpFile
     Write-Output @"
 {:version "$Version"
  :config-files [$PathVector]
- :install-dir $InstallDir
- :config-dir $ConfigDir
- :cache-dir $CacheDir
+ :install-dir "$InstallDir"
+ :config-dir "$ConfigDir"
+ :cache-dir "$CacheDir"
  :force $Force
  :repro $Repro
  :resolve-aliases "$($ResolveAliases -join ' ')"
@@ -318,12 +318,14 @@ cp_file      = $CpFile
     & $JavaCmd -Xmx256m -classpath $ToolsCp clojure.main -m clojure.tools.deps.alpha.script.print-tree --libs-file $LibsFile
   } else {
     if (Test-Path $JvmFile) {
-      $JvmCacheOpts = Get-Content $JvmFile
+      # TODO this seems dangerous
+      $JvmCacheOpts = (Get-Content $JvmFile) -split '\s+'
     }
     if (Test-Path $MainFile) {
-      $MainCacheOpts = Get-Content $MainFile
+      # TODO this seems dangerous
+      $MainCacheOpts = (Get-Content $MainFile) -split '\s+'
     }
-    & $JavaCmd @JvmCacheOpts @JvmOpts "-Dclojure.libfile=$LibsFile" -classpath $CP clojure.main @MainCacheOpts @ClojureArgs
+    & $JavaCmd $JvmCacheOpts $JvmOpts "-Dclojure.libfile=$LibsFile" -classpath $CP clojure.main $MainCacheOpts $ClojureArgs
   }
 }
 
