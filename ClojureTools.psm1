@@ -323,7 +323,7 @@ cp_file      = $CpFile
     }
     if (Test-Path $MainFile) {
       # TODO this seems dangerous
-      $MainCacheOpts = (Get-Content $MainFile) -split '\s+'
+      $MainCacheOpts = ((Get-Content $MainFile) -split '\s+') -replace '"', '\"'
     }
     & $JavaCmd $JvmCacheOpts $JvmOpts "-Dclojure.libfile=$LibsFile" -classpath $CP clojure.main $MainCacheOpts $ClojureArgs
   }
