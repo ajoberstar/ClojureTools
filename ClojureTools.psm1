@@ -50,7 +50,7 @@ function Invoke-Clojure {
         $ResolveAliases += ":$aliases"
       } else {
         echo "Missing aliases"
-        exit 1
+        return
       }
     } elseif ($arg.StartsWith("-C")) {
       $aliases, $params = $params
@@ -58,7 +58,7 @@ function Invoke-Clojure {
         $ClassPathAliases += ":$aliases"
       } else {
         echo "Missing aliases"
-        exit 1
+        return
       }
     } elseif ($arg.StartsWith("-O")) {
       $aliases, $params = $params
@@ -66,7 +66,7 @@ function Invoke-Clojure {
         $JvmAliases += ":$aliases"
       } else {
         echo "Missing aliases"
-        exit 1
+        return
       }
     } elseif ($arg.StartsWith("-M")) {
       $aliases, $params = $params
@@ -74,7 +74,7 @@ function Invoke-Clojure {
         $MainAliases += ":$aliases"
       } else {
         echo "Missing aliases"
-        exit 1
+        return
       }
     } elseif ($arg.StartsWith("-A")) {
       $aliases, $params = $params
@@ -82,19 +82,19 @@ function Invoke-Clojure {
         $AllAliases += ":$aliases"
       } else {
         echo "Missing aliases"
-        exit 1
+        return
       }
     } elseif ($arg -eq "-Sdeps") {
       $DepsData, $params = $params
       if (!($DepsData)) {
         echo "Missing deps"
-        exit 1
+        return
       }
     } elseif ($arg -eq "-Scp") {
       $ForceCP, $params = $params
       if (!($ForceCP)) {
         echo "Missing path"
-        exit 1
+        return
       }
     } elseif ($arg -eq "-Spath") {
       $PrintClassPath = $TRUE
@@ -114,7 +114,7 @@ function Invoke-Clojure {
       $ResolveTags = $TRUE
     } elseif ($arg.StartsWith("-S")) {
       echo "Invalid option: $arg"
-      exit 1
+      return
     } elseif (($arg -eq "-h") -or ($arg -eq "--help") -or ($arg -eq "-?")) {
       if ($MainAliases.count -gt 0 -or $AllAliases.count -gt 0) {
         $ClojureArgs += @($arg) + $params
@@ -134,7 +134,7 @@ function Invoke-Clojure {
       $JavaCmd = "$JAVA_HOME\bin\java.exe"
     } else {
       echo "Couldn't find 'java'. Please set JAVA_HOME."
-      exit 1
+      return
     }
   }
 
