@@ -182,7 +182,7 @@ function Invoke-Clojure {
      https://clojure.org/guides/deps_and_cli
      https://clojure.org/reference/repl_and_main
 "
-    exit 0
+    return
   }
 
   $ToolsCP = "$InstallDir\clojure-tools-$Version.jar"
@@ -190,10 +190,10 @@ function Invoke-Clojure {
   if ($ResolveTags) {
     if (Test-Path deps.edn) {
       & "$JavaCmd" -classpath "$ToolsCP" clojure.main -m clojure.tools.deps.alpha.script.resolve-tags "--deps-file=deps.edn"
-      exit 0
+      return
     } else {
       echo "deps.edn does not exist"
-      exit 1
+      return
     }
   }
 
