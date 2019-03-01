@@ -5,6 +5,9 @@ This is temporary working repo for the Windows clojure tools install. It is inte
 ## How to test?
 
 1. Open a PowerShell window
+1. Confirm your Execution-Policy is set to `RemoteSigned`
+   1. Check output of `Get-ExecutionPolicy`
+   1. If needed, run `Set-ExecutionPolicy RemoteSigned -Scope CurrentUser`
 1. Clone the repo into your module path e.g. `C:\Users\<user>\Documents\WindowsPowerShell\Modules`
 1. Navigate to a project with a `deps.edn`
 1. Run `Import-Module ClojureTools`
