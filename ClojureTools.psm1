@@ -4,7 +4,7 @@ function Get-StringHash($str) {
   return [System.BitConverter]::ToString($md5.ComputeHash($utf8.GetBytes($str)))
 }
 
-function IsNewerFile($file1, $file2) {
+function Test-NewerFile($file1, $file2) {
   if (!(Test-Path $file1)) {
     return $FALSE
   }
@@ -17,12 +17,15 @@ function IsNewerFile($file1, $file2) {
 }
 
 function Invoke-Clojure {
+  $ErrorActionPreference = 'Stop'
+
+  # Set dir containing the installed files
   $InstallDir = $PSScriptRoot
-  $Version = "1.10.0.414"
+  $Version = '1.10.0.414'
   $ToolsCp = "$InstallDir\clojure-tools-$Version.jar"
 
-  $ErrorActionPreference = "Stop"
 
+  # Extract opts
   $PrintClassPath = $FALSE
   $Describe = $FALSE
   $Verbose = $FALSE
@@ -42,192 +45,187 @@ function Invoke-Clojure {
   $params = $args
   while ($params.Count -gt 0) {
     $arg, $params = $params
-    if ($arg.StartsWith("-J")) {
+    if ($arg.StartsWith('-J')) {
       $JvmOpts += $arg.Substring(2)
-    } elseif ($arg.StartsWith("-R")) {
+    } elseif ($arg.StartsWith('-R')) {
       $aliases, $params = $params
       if ($aliases) {
         $ResolveAliases += ":$aliases"
-      } else {
-        echo "Missing aliases"
-        return
       }
-    } elseif ($arg.StartsWith("-C")) {
+    } elseif ($arg.StartsWith('-C')) {
       $aliases, $params = $params
       if ($aliases) {
         $ClassPathAliases += ":$aliases"
-      } else {
-        echo "Missing aliases"
-        return
       }
-    } elseif ($arg.StartsWith("-O")) {
+    } elseif ($arg.StartsWith('-O')) {
       $aliases, $params = $params
       if ($aliases) {
         $JvmAliases += ":$aliases"
-      } else {
-        echo "Missing aliases"
-        return
       }
-    } elseif ($arg.StartsWith("-M")) {
+    } elseif ($arg.StartsWith('-M')) {
       $aliases, $params = $params
       if ($aliases) {
         $MainAliases += ":$aliases"
-      } else {
-        echo "Missing aliases"
-        return
       }
-    } elseif ($arg.StartsWith("-A")) {
+    } elseif ($arg.StartsWith('-A')) {
       $aliases, $params = $params
       if ($aliases) {
         $AllAliases += ":$aliases"
-      } else {
-        echo "Missing aliases"
-        return
       }
-    } elseif ($arg -eq "-Sdeps") {
+    } elseif ($arg -eq '-Sdeps') {
       $DepsData, $params = $params
-      if (!($DepsData)) {
-        echo "Missing deps"
-        return
-      }
-    } elseif ($arg -eq "-Scp") {
+    } elseif ($arg -eq '-Scp') {
       $ForceCP, $params = $params
-      if (!($ForceCP)) {
-        echo "Missing path"
-        return
-      }
-    } elseif ($arg -eq "-Spath") {
+    } elseif ($arg -eq '-Spath') {
       $PrintClassPath = $TRUE
-    } elseif ($arg -eq "-Sverbose") {
+    } elseif ($arg -eq '-Sverbose') {
       $Verbose = $TRUE
-    } elseif ($arg -eq "-Sdescribe") {
+    } elseif ($arg -eq '-Sdescribe') {
       $Describe = $TRUE
-    } elseif ($arg -eq "-Sforce") {
+    } elseif ($arg -eq '-Sforce') {
       $Force = $TRUE
-    } elseif ($arg -eq "-Srepro") {
+    } elseif ($arg -eq '-Srepro') {
       $Repro = $TRUE
-    } elseif ($arg -eq "-Stree") {
+    } elseif ($arg -eq '-Stree') {
       $Tree = $TRUE
-    } elseif ($arg -eq "-Spom") {
+    } elseif ($arg -eq '-Spom') {
       $Pom = $TRUE
-    } elseif ($arg -eq "-Sresolve-tags") {
+    } elseif ($arg -eq '-Sresolve-tags') {
       $ResolveTags = $TRUE
-    } elseif ($arg.StartsWith("-S")) {
-      echo "Invalid option: $arg"
+    } elseif ($arg.StartsWith('-S')) {
+      Write-Error "Invalid option: $arg"
       return
-    } elseif (($arg -eq "-h") -or ($arg -eq "--help") -or ($arg -eq "-?")) {
-      if ($MainAliases.count -gt 0 -or $AllAliases.count -gt 0) {
-        $ClojureArgs += @($arg) + $params
+    } elseif ($arg -in '-h', '--help', '-?') {
+      if ($MainAliases -or $AllAliases) {
+        $ClojureArgs += $arg, $params
         break
       } else {
         $Help = $TRUE
       }
     } else {
-      $ClojureArgs += @($arg) + $params
+      $ClojureArgs += $arg, $params
       break
     }
   }
 
-  $JavaCmd = (Get-Command java.exe -ErrorAction SilentlyContinue).Path
-  if (!$JavaCmd) {
-    if ($env:JAVA_HOME -and (Test-Path $env:JAVA_HOME)) {
-      $JavaCmd = "$JAVA_HOME\bin\java.exe"
-    } else {
-      echo "Couldn't find 'java'. Please set JAVA_HOME."
+  # Find java executable
+  $JavaCmd = (Get-Command java -ErrorAction SilentlyContinue).Path
+  if (-not $JavaCmd) {
+    $CandidateJavas = "$env:JAVA_HOME\bin\java.exe", "$env:JAVA_HOME\bin\java"
+    $JavaCmd = $CandidateJavas | Where-Object { Test-Path $_ } | Select-Object -First 1
+    if (-not ($env:JAVA_HOME -and $JavaCmd)) {
+      Write-Error "Couldn't find 'java'. Please set JAVA_HOME."
       return
     }
   }
 
   if ($Help) {
-    echo "
-    Usage: clojure [dep-opt*] [init-opt*] [main-opt] [arg*]
-           clj     [dep-opt*] [init-opt*] [main-opt] [arg*]
+    Write-Host @'
+Usage: clojure [dep-opt*] [init-opt*] [main-opt] [arg*]
+        clj     [dep-opt*] [init-opt*] [main-opt] [arg*]
 
-    The clojure script is a runner for Clojure. clj is a wrapper
-    for interactive repl use. These scripts ultimately construct and
-    invoke a command-line of the form:
+The clojure script is a runner for Clojure. clj is a wrapper
+for interactive repl use. These scripts ultimately construct and
+invoke a command-line of the form:
 
-    java [java-opt*] -cp classpath clojure.main [init-opt*] [main-opt] [arg*]
+java [java-opt*] -cp classpath clojure.main [init-opt*] [main-opt] [arg*]
 
-    The dep-opts are used to build the java-opts and classpath:
-     -Jopt          Pass opt through in java_opts, ex: -J-Xmx512m
-     -Oalias...     Concatenated jvm option aliases, ex: -O:mem
-     -Ralias...     Concatenated resolve-deps aliases, ex: -R:bench:1.9
-     -Calias...     Concatenated make-classpath aliases, ex: -C:dev
-     -Malias...     Concatenated main option aliases, ex: -M:test
-     -Aalias...     Concatenated aliases of any kind, ex: -A:dev:mem
-     -Sdeps EDN     Deps data to use as the final deps file
-     -Spath         Compute classpath and echo to stdout only
-     -Scp CP        Do NOT compute or cache classpath, use this one instead
-     -Srepro        Use only the local deps.edn (ignore other config files)
-     -Sforce        Force recomputation of the classpath (don't use the cache)
-     -Spom          Generate (or update existing) pom.xml with deps and paths
-     -Stree         Print dependency tree
-     -Sresolve-tags Resolve git coordinate tags to shas and update deps.edn
-     -Sverbose      Print important path info to console
-     -Sdescribe     Print environment and command parsing info as data
+The dep-opts are used to build the java-opts and classpath:
+  -Jopt          Pass opt through in java_opts, ex: -J-Xmx512m
+  -Oalias...     Concatenated jvm option aliases, ex: -O:mem
+  -Ralias...     Concatenated resolve-deps aliases, ex: -R:bench:1.9
+  -Calias...     Concatenated make-classpath aliases, ex: -C:dev
+  -Malias...     Concatenated main option aliases, ex: -M:test
+  -Aalias...     Concatenated aliases of any kind, ex: -A:dev:mem
+  -Sdeps EDN     Deps data to use as the final deps file
+  -Spath         Compute classpath and echo to stdout only
+  -Scp CP        Do NOT compute or cache classpath, use this one instead
+  -Srepro        Use only the local deps.edn (ignore other config files)
+  -Sforce        Force recomputation of the classpath (don't use the cache)
+  -Spom          Generate (or update existing) pom.xml with deps and paths
+  -Stree         Print dependency tree
+  -Sresolve-tags Resolve git coordinate tags to shas and update deps.edn
+  -Sverbose      Print important path info to console
+  -Sdescribe     Print environment and command parsing info as data
 
-    init-opt:
-     -i, --init path     Load a file or resource
-     -e, --eval string   Eval exprs in string; print non-nil values
+init-opt:
+  -i, --init path     Load a file or resource
+  -e, --eval string   Eval exprs in string; print non-nil values
 
-    main-opt:
-     -m, --main ns-name  Call the -main function from namespace w/args
-     -r, --repl          Run a repl
-     path                Run a script from a file or resource
-     -                   Run a script from standard input
-     -h, -?, --help      Print this help message and exit
+main-opt:
+  -m, --main ns-name  Call the -main function from namespace w/args
+  -r, --repl          Run a repl
+  path                Run a script from a file or resource
+  -                   Run a script from standard input
+  -h, -?, --help      Print this help message and exit
 
-    For more info, see:
-     https://clojure.org/guides/deps_and_cli
-     https://clojure.org/reference/repl_and_main
-"
+For more info, see:
+  https://clojure.org/guides/deps_and_cli
+  https://clojure.org/reference/repl_and_main
+'@
     return
   }
 
-  $ToolsCP = "$InstallDir\clojure-tools-$Version.jar"
-
+  # Execute resolve-tags command
   if ($ResolveTags) {
     if (Test-Path deps.edn) {
-      & "$JavaCmd" -classpath "$ToolsCP" clojure.main -m clojure.tools.deps.alpha.script.resolve-tags "--deps-file=deps.edn"
+      & $JavaCmd -classpath $ToolsCP clojure.main -m clojure.tools.deps.alpha.script.resolve-tags --deps-file=deps.edn
       return
     } else {
-      echo "deps.edn does not exist"
+      Write-Error 'deps.edn does not exist'
       return
     }
   }
 
-  $ConfigDir = "$env:USERPROFILE\.clojure"
+  # Determine user config directory
+  if ($env:CLJ_CONFIG) {
+    $ConfigDir = $env:CLJ_CONFIG
+  } elseif ($env:HOME) {
+    $ConfigDir = "$env:HOME\.clojure"
+  } else {
+    $ConfigDir = "$env:USERPROFILE\.clojure"
+  }
+
+  # If user config directory does not exist, create it
   if (!(Test-Path "$ConfigDir")) {
     New-Item -Type Directory "$ConfigDir" | Out-Null
   }
-
   if (!(Test-Path "$ConfigDir\deps.edn")) {
     Copy-Item "$InstallDir\example-deps.edn" "$ConfigDir\deps.edn"
   }
 
-  $UserCacheDir = "$ConfigDir\.cpcache"
-  if ($Repro) {
-    $ConfigPaths = @("$InstallDir\deps.edn", "deps.edn")
+  # Determine user cache directory
+  if ($env:CLJ_CACHE) {
+    $UserCacheDir = $env:CLJ_CACHE
   } else {
-    $ConfigPaths = @("$InstallDir\deps.edn", "$ConfigDir\deps.edn", "deps.edn")
+    $UserCacheDir = "$ConfigDir\.cpcache"
+  }
+
+  # Chain deps.edn in config paths. repro=skip config dir
+  if ($Repro) {
+    $ConfigPaths = "$InstallDir\deps.edn", 'deps.edn'
+  } else {
+    $ConfigPaths = "$InstallDir\deps.edn", "$ConfigDir\deps.edn", 'deps.edn'
   }
   $ConfigStr = $ConfigPaths -join ','
 
-  if (Test-Path "deps.edn") {
-    $CacheDir = ".cpcache"
+  # Determine whether to use user or project cache
+  if (Test-Path deps.edn) {
+    $CacheDir = '.cpcache'
   } else {
-    $CacheDir = "$UserCacheDir"
+    $CacheDir = $UserCacheDir
   }
 
-  $CK = "$($ResolveAliases -join '')|$($ClassPathAliases -join '')|$($AllAliases -join '')|$($JvmAliases -join '')|$($MainAliases -join '')|$DepsData|$($ConfigPaths -join '|')"
-  $CK = (Get-StringHash $CK) -replace '-', ''
+  # Construct location of cached classpath file
+  $CacheKey = "$($ResolveAliases -join '')|$($ClassPathAliases -join '')|$($AllAliases -join '')|$($JvmAliases -join '')|$($MainAliases -join '')|$DepsData|$($ConfigPaths -join '|')"
+  $CacheKeyHash = (Get-StringHash $CacheKey) -replace '-', ''
 
-  $LibsFile = "$CacheDir\$CK.libs"
-  $CpFile = "$CacheDir\$CK.cp"
-  $JvmFile = "$CacheDir/$CK.jvm"
-  $MainFile = "$CacheDir/$CK.main"
+  $LibsFile = "$CacheDir\$CacheKeyHash.libs"
+  $CpFile = "$CacheDir\$CacheKeyHash.cp"
+  $JvmFile = "$CacheDir\$CacheKeyHash.jvm"
+  $MainFile = "$CacheDir\$CacheKeyHash.main"
 
+  # Print paths in verbose mode
   if ($Verbose) {
     Write-Host @"
 version      = $Version
@@ -239,22 +237,19 @@ cp_file      = $CpFile
 "@
   }
 
+  # Check for stale classpath file
   $Stale = $FALSE
   if ($Force -or !(Test-Path $CpFile)) {
     $Stale = $TRUE
-  } else {
-    foreach ($ConfigPath in $ConfigPaths) {
-      if (IsNewerFile $ConfigPath $CpFile) {
-        $Stale = $TRUE
-        break
-      }
-    }
+  } elseif ($ConfigPaths | Where-Object { Test-NewerFile $_ $CpFile }) {
+    $Stale = $TRUE
   }
 
+  # Make tools args if needed
   if ($Stale -or $Pom) {
     $ToolsArgs = @()
     if ($DepsData) {
-      $ToolsArgs += "--config-data"
+      $ToolsArgs += '--config-data'
       $ToolsArgs += $DepsData
     }
     if ($ResolveAliases) {
@@ -273,18 +268,24 @@ cp_file      = $CpFile
       $ToolsArgs += "-A$AllAliases"
     }
     if ($ForceCp) {
-      $ToolsArgs += "--skip-cp"
+      $ToolsArgs += '--skip-cp'
     }
   }
 
-  if ($Stale) {
+  # If stale, run make-classpath to refresh cached classpath
+  if ($Stale -and (-not $Describe)) {
     if ($Verbose) {
       Write-Host "Refreshing classpath"
     }
-    & $JavaCmd -Xmx256m -classpath $ToolsCp clojure.main -m clojure.tools.deps.alpha.script.make-classpath --config-files $ConfigStr --libs-file $LibsFile --cp-file $CpFile --jvm-file $JvmFile --main-file $MainFile @ToolsArgs
+    & $JavaCmd -Xmx256m -classpath $ToolsCp clojure.main -m clojure.tools.deps.alpha.script.make-classpath --config-files $ConfigStr --libs-file $LibsFile --cp-file $CpFile --jvm-file $JvmFile --main-file $MainFile $ToolsArgs
+    if ($LastExitCode -ne 0) {
+      return
+    }
   }
 
-  if ($ForceCp) {
+  if ($Describe) {
+    $CP = ''
+  } elseif ($ForceCp) {
     $CP = $ForceCp
   } else {
     $CP = Get-Content $CpFile
@@ -295,11 +296,7 @@ cp_file      = $CpFile
   } elseif ($PrintClassPath) {
     Write-Host $CP
   } elseif ($Describe) {
-    foreach ($ConfigPath in $ConfigPaths) {
-      if (Test-Path $ConfigPath) {
-        $PathVector = "$PathVector`"$ConfigPath`" "
-      }
-    }
+    $PathVector = ($ConfigPaths | ForEach-Object { "`"$_`"" }) -join ' '
     Write-Output @"
 {:version "$Version"
  :config-files [$PathVector]
@@ -325,7 +322,7 @@ cp_file      = $CpFile
       # TODO this seems dangerous
       $MainCacheOpts = ((Get-Content $MainFile) -split '\s+') -replace '"', '\"'
     }
-    & $JavaCmd $JvmCacheOpts $JvmOpts "-Dclojure.libfile=$LibsFile" -classpath $CP clojure.main $MainCacheOpts $ClojureArgs
+    & $JavaCmd @JvmCacheOpts @JvmOpts "-Dclojure.libfile=$LibsFile" -classpath $CP clojure.main @MainCacheOpts @ClojureArgs
   }
 }
 
