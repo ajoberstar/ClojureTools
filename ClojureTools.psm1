@@ -16,6 +16,42 @@ function Test-NewerFile($file1, $file2) {
   return $mod1 -gt $mod2
 }
 
+# https://stackoverflow.com/questions/34559553/create-a-temporary-directory-in-powershell
+function Get-TempJarName () {
+  $parent = [System.IO.Path]::GetTempPath()
+  [string] $guid = [System.Guid]::NewGuid()
+  return Join-Path (Get-M2Root) "clojure-path-$($guid).jar"
+}
+
+function Get-M2Root () {
+  return [io.path]::combine($HOME, ".m2", "repository")
+}
+
+# Create a "pathing jar". This is a workaround for Windows when the classpath gets too large 
+# to fit on the command-line (which has a limit of 1024 bytes). For the workaround, we generate 
+# a jar file consisting of just a manifest file pointing to all of the jar files that would 
+# otherwise be specified on the command-line, and then launch java with only the pathing jar 
+# on the command-line. Note that per the manifest spec, the entries in the manifest must be 
+# relative to the pathing jar, so we create the pathing jar in the user's maven repository root.
+function Create-PathingJar ($classpath) {
+  [string] $jar = (Get-TempJarName)
+  [string] $cleanPath = $classpath -replace ";", " `n " `
+                                   -replace "\\", "/" `
+                                   -replace " \S+/\.m2/repository/", " "
+  [System.IO.FileInfo] $manifestFile = New-TemporaryFile
+  try {
+    Set-Content -Path $manifestFile.FullName -Value "Class-Path: $cleanPath `n"
+    jar cfm $jar $manifestFile.FullName
+  } finally {
+    Remove-Item $manifestFile
+  }
+  return $jar
+}
+
+function test ($CP) {
+  Write-Host (Create-PathingJar $CP)
+}
+
 function Invoke-Clojure {
   $ErrorActionPreference = 'Stop'
 
@@ -322,7 +358,20 @@ cp_file      = $CpFile
       # TODO this seems dangerous
       $MainCacheOpts = ((Get-Content $MainFile) -split '\s+') -replace '"', '\"'
     }
-    & $JavaCmd @JvmCacheOpts @JvmOpts "-Dclojure.libfile=$LibsFile" -classpath $CP clojure.main @MainCacheOpts @ClojureArgs
+    $needsPathingJar = ($CP.length -gt 1024)
+    if ($needsPathingJar) {
+      $jar = Create-PathingJar $CP
+      $ClassPathArgs = "-classpath", $jar
+    } else {
+      $ClassPathArgs = "-classpath", $CP
+    }
+    try {
+      & $JavaCmd @JvmCacheOpts @JvmOpts "-Dclojure.libfile=$LibsFile" @ClassPathArgs clojure.main @MainCacheOpts @ClojureArgs
+    } finally {
+      if ($needsPathingJar) {
+        Remove-Item $jar
+      }
+    }
   }
 }
 
